@@ -1,0 +1,181 @@
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local Camera = workspace.CurrentCamera
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local loadGui = Instance.new("ScreenGui")
+loadGui.Name = "TWD_MironLoading"; loadGui.ResetOnSpawn = false; loadGui.Parent = CoreGui
+local loadLabel = Instance.new("TextLabel")
+loadLabel.Size = UDim2.new(0, 300, 0, 50); loadLabel.Position = UDim2.new(0.5, -150, 0.5, -25)
+loadLabel.BackgroundTransparency = 1; loadLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadLabel.TextSize = 24; loadLabel.Font = Enum.Font.SourceSansBold; loadLabel.Text = "Loading."; loadLabel.Parent = loadGui
+local loadStroke = Instance.new("UIStroke")
+loadStroke.Color = Color3.fromRGB(0, 0, 0); loadStroke.Thickness = 2; loadStroke.Parent = loadLabel
+
+task.spawn(function()
+    local startTime = os.time()
+    local order = {"Loading.", "Loading..", "Loading...", "Loading.."}
+    local index = 1
+    while os.time() - startTime < 10 do
+        loadLabel.Text = order[index]
+        index = index + 1
+        if index > #order then index = 1 end
+        task.wait(0.5)
+    end
+    loadGui:Destroy()
+end)
+
+local AIM_KEY = Enum.UserInputType.MouseButton2; local ZOOM_KEY = Enum.KeyCode.C; local SMOOTHNESS = 0.15; local ZOOM_FOV = 25; local DEFAULT_FOV = 70; local FOV_RADIUS = 120
+local isAiming = false; local isZooming = false; local grassRemoved = false; local targetsList = {}; local fovVisible = true; local panelOpen = true
+local origAmbient = Lighting.Ambient; local origOutdoorAmbient = Lighting.OutdoorAmbient; local Mouse = Players.LocalPlayer:GetMouse()
+
+local fovGui = Instance.new("ScreenGui")
+fovGui.Name = "TWD_MironFOV"; fovGui.ResetOnSpawn = false; fovGui.Parent = CoreGui
+local fovFrame = Instance.new("Frame")
+fovFrame.Name = "FOV_Circle"; fovFrame.AnchorPoint = Vector2.new(0.5, 0.5); fovFrame.Size = UDim2.new(0, FOV_RADIUS * 2, 0, FOV_RADIUS * 2); fovFrame.BackgroundTransparency = 1; fovFrame.Parent = fovGui
+local fovStroke = Instance.new("UIStroke")
+fovStroke.Color = Color3.fromRGB(255, 255, 255); fovStroke.Thickness = 1.5; fovStroke.Parent = fovFrame
+local fovCorner = Instance.new("UICorner")
+fovCorner.CornerRadius = UDim.new(1, 0); fovCorner.Parent = fovFrame
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "TWD_MironMenu"; gui.ResetOnSpawn = false; gui.Parent = CoreGui
+local main = Instance.new("Frame")
+main.Name = "MainPanel"; main.Size = UDim2.new(0, 160, 0, 275); main.Position = UDim2.new(1, -170, 0.4, 0); main.BackgroundColor3 = Color3.fromRGB(25, 25, 25); main.BorderSizePixel = 0; main.Parent = gui
+local c1 = Instance.new("UICorner"); c1.CornerRadius = UDim.new(0, 8); c1.Parent = main
+local tgl = Instance.new("TextButton")
+tgl.Size = UDim2.new(0, 25, 0, 40); tgl.Position = UDim2.new(0, -25, 0.5, -20); tgl.BackgroundColor3 = Color3.fromRGB(35, 35, 35); tgl.TextColor3 = Color3.fromRGB(255, 255, 255); tgl.Text = ">"; tgl.TextSize = 18; tgl.BorderSizePixel = 0; tgl.Parent = main
+local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0, 6); c2.Parent = tgl
+local lbl = Instance.new("TextLabel")
+lbl.Size = UDim2.new(1, 0, 0, 35); lbl.BackgroundTransparency = 1; lbl.TextColor3 = Color3.fromRGB(255, 255, 255); lbl.Text = "TWD:miron"; lbl.TextSize = 16; lbl.Font = Enum.Font.SourceSansBold; lbl.Parent = main
+
+local function createBtn(name, text, pos, color)
+    local b = Instance.new("TextButton")
+    b.Name = name; b.Size = UDim2.new(0, 130, 0, 40); b.Position = pos; b.BackgroundColor3 = Color3.fromRGB(45, 45, 45); b.TextColor3 = color; b.Text = text; b.TextSize = 16; b.BorderSizePixel = 0; b.Parent = main
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = b
+    return b
+end
+
+local bLag = createBtn("AntiLag", "Anti Lag: OFF", UDim2.new(0, 15, 0, 50), Color3.fromRGB(0, 255, 0))
+local bFB = createBtn("FullBright", "Full Bright: OFF", UDim2.new(0, 15, 0, 105), Color3.fromRGB(0, 255, 0))
+local bFOV = createBtn("FOV", "FOV Circle: ON", UDim2.new(0, 15, 0, 160), Color3.fromRGB(0, 255, 0))
+local bKB = createBtn("Keybinds", "Keybinds", UDim2.new(0, 15, 0, 215), Color3.fromRGB(255, 255, 255))
+
+local kb = Instance.new("Frame")
+kb.Size = UDim2.new(0, 180, 0, 110); kb.Position = UDim2.new(0.5, -90, 0.5, -55); kb.BackgroundColor3 = Color3.fromRGB(30, 30, 30); kb.BorderSizePixel = 0; kb.Visible = false; kb.Parent = gui
+local c3 = Instance.new("UICorner"); c3.CornerRadius = UDim.new(0, 8); c3.Parent = kb
+local cls = Instance.new("TextButton")
+cls.Size = UDim2.new(0, 20, 0, 20); cls.Position = UDim2.new(1, -25, 0, 5); cls.BackgroundTransparency = 1; cls.TextColor3 = Color3.fromRGB(255, 100, 100); cls.Text = "X"; cls.TextSize = 16; cls.Font = Enum.Font.SourceSansBold; cls.Parent = kb
+local inf = Instance.new("TextLabel")
+inf.Size = UDim2.new(1, 0, 1, -25); inf.Position = UDim2.new(0, 0, 0, 25); inf.BackgroundTransparency = 1; inf.TextColor3 = Color3.fromRGB(230, 230, 230); inf.Text = "aim - right click\nzoom - c"; inf.TextSize = 16; inf.Font = Enum.Font.SourceSans; inf.LineHeight = 1.3; inf.Parent = kb
+local function applyChams(obj, isPlayer)
+    if obj:FindFirstChild("WalkerChams") then obj.WalkerChams:Destroy() end
+    if obj:FindFirstChild("PlayerChams") then obj.PlayerChams:Destroy() end
+    local tag = isPlayer and "PlayerChams" or "WalkerChams"
+    local highlight = Instance.new("Highlight")
+    highlight.Name = tag; highlight.FillTransparency = 0.3; highlight.OutlineTransparency = 0; highlight.Adornee = obj; highlight.Parent = obj
+    highlight.FillColor = isPlayer and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(0, 255, 0)
+    highlight.OutlineColor = isPlayer and Color3.fromRGB(0, 50, 150) or Color3.fromRGB(0, 100, 0)
+end
+
+local function trackCharacter(char)
+    if not char or not char.Parent or char == Players.LocalPlayer.Character then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local isPlayer = false
+    for _, child in ipairs(char:GetChildren()) do
+        if child:IsA("Clothing") or string.find(string.lower(child.Name), "pant") or string.find(string.lower(child.Name), "shirt") then
+            isPlayer = true; break
+        end
+    end
+    local nameLower = string.lower(char.Name)
+    local parentNameLower = char.Parent and string.lower(char.Parent.Name) or ""
+    if string.find(nameLower, "walker") or string.find(parentNameLower, "walker") or string.find(nameLower, "zombie") or string.find(nameLower, "bot") then
+        isPlayer = false
+    end
+    applyChams(char, isPlayer)
+    if not table.find(targetsList, char) then table.insert(targetsList, char) end
+end
+
+for _, v in ipairs(workspace:GetDescendants()) do
+    if v:IsA("Humanoid") and v.Parent then trackCharacter(v.Parent) end
+end
+
+workspace.DescendantAdded:Connect(function(v)
+    if v:IsA("Humanoid") then
+        task.wait(0.1)
+        if v.Parent then trackCharacter(v.Parent) end
+    end
+end)
+
+local function getClosestTarget()
+    local closest = nil; local shortest = math.huge; local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+    for i = #targetsList, 1, -1 do
+        local obj = targetsList[i]
+        if obj and obj.Parent then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local part = obj:FindFirstChild("HeadHitbox") or obj:FindFirstChild("Head") or obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso") or obj:FindFirstChild("UpperTorso")
+            if hum and part and hum.Health > 0 then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if dist < FOV_RADIUS and dist < shortest then shortest = dist; closest = part end
+                end
+            end
+        else table.remove(targetsList, i) end
+    end
+    return closest
+end
+
+UIS.InputBegan:Connect(function(i, p)
+    if p then return end
+    if i.UserInputType == AIM_KEY then isAiming = true elseif i.KeyCode == ZOOM_KEY then isZooming = true end
+end)
+
+UIS.InputEnded:Connect(function(i)
+    if i.UserInputType == AIM_KEY then isAiming = false elseif i.KeyCode == ZOOM_KEY then isZooming = false end
+end)
+
+RunService.RenderStepped:Connect(function()
+    fovFrame.Position = UDim2.new(0, Mouse.X, 0, Mouse.Y + 36)
+    Camera.FieldOfView = Camera.FieldOfView + ((isZooming and ZOOM_FOV or DEFAULT_FOV) - Camera.FieldOfView) * 0.2
+    Lighting.Ambient = _G.FullBrightEnabled and Color3.fromRGB(255,255,255) or origAmbient
+    Lighting.OutdoorAmbient = _G.FullBrightEnabled and Color3.fromRGB(255,255,255) or origOutdoorAmbient
+    if isAiming then
+        local t = getClosestTarget()
+        if t then Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, t.Position), SMOOTHNESS) end
+    end
+end)
+
+tgl.MouseButton1Click:Connect(function()
+    panelOpen = not panelOpen
+    main:TweenPosition(panelOpen and UDim2.new(1, -170, 0.4, 0) or UDim2.new(1, 0, 0.4, 0), "Out", "Quad", 0.3, true)
+    tgl.Text = panelOpen and ">" or "<"
+    if not panelOpen then kb.Visible = false end
+end)
+
+bLag.MouseButton1Click:Connect(function()
+    grassRemoved = not grassRemoved
+    local t = workspace:FindFirstChildOfClass("Terrain") or workspace.Terrain
+    pcall(function() sethiddenproperty(t, "GrassLength", grassRemoved and 0 or 1) end)
+    for _, v in ipairs(t:GetChildren()) do if v:IsA("Folder") or string.find(string.lower(v.Name), "grass") then v:Destroy() end end
+    bLag.Text = grassRemoved and "Anti Lag: ON" or "Anti Lag: OFF"
+    bLag.TextColor3 = grassRemoved and Color3.fromRGB(255,50,50) or Color3.fromRGB(0,255,0)
+end)
+
+bFB.MouseButton1Click:Connect(function()
+    _G.FullBrightEnabled = not _G.FullBrightEnabled
+    bFB.Text = _G.FullBrightEnabled and "Full Bright: ON" or "Full Bright: OFF"
+    bFB.TextColor3 = _G.FullBrightEnabled and Color3.fromRGB(255,50,50) or Color3.fromRGB(0,255,0)
+end)
+
+bFOV.MouseButton1Click:Connect(function()
+    fovVisible = not fovVisible; fovFrame.Visible = fovVisible
+    bFOV.Text = fovVisible and "FOV Circle: ON" or "FOV Circle: OFF"
+    bFOV.TextColor3 = fovVisible and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,50,50)
+end)
+
+bKB.MouseButton1Click:Connect(function() kb.Visible = not kb.Visible end)
+cls.MouseButton1Click:Connect(function() kb.Visible = false end)
